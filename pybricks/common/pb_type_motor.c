@@ -29,6 +29,64 @@ STATIC void wait_for_completion(pbio_servo_t *srv) {
     }
 }
 
+// A generator-like type for waiting on a motor operation to complete.
+typedef struct {
+    mp_obj_base_t base;
+    pbio_servo_t *srv;
+} pb_type_MotorWait_t;
+
+// The __next__() method should raise a StopIteration if the operation is
+// complete.
+STATIC mp_obj_t pb_type_MotorWait_iternext(mp_obj_t self_in) {
+    pb_type_MotorWait_t *self = MP_OBJ_TO_PTR(self_in);
+
+    if (!pbio_servo_is_connected(self->srv)) {
+        pb_assert(PBIO_ERROR_IO);
+    }
+
+    if (pbio_control_is_done(&self->srv->control)) {
+        return MP_OBJ_STOP_ITERATION;
+    }
+
+    return mp_const_none;
+}
+
+// The close() method is used to cancel an operation before it completes. If
+// the operation is already complete, it should do nothing. It can be called
+// more than once.
+STATIC mp_obj_t pb_type_MotorWait_close(mp_obj_t self_in) {
+    pb_type_MotorWait_t *self = MP_OBJ_TO_PTR(self_in);
+
+    if (!pbio_control_is_done(&self->srv->control)) {
+        pbio_servo_stop(self->srv, self->srv->control.after_stop);
+    }
+
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(pb_type_MotorWait_close_obj, pb_type_MotorWait_close);
+
+STATIC const mp_rom_map_elem_t pb_type_MotorWait_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&pb_type_MotorWait_close_obj) },
+};
+MP_DEFINE_CONST_DICT(pb_type_MotorWait_locals_dict, pb_type_MotorWait_locals_dict_table);
+
+// This is a partial implementation of the Python generator type. It is missing
+// send(value) and throw(type[, value[, traceback]])
+STATIC const mp_obj_type_t pb_type_MotorWait = {
+    .base.type = &mp_type_type,
+    .name = MP_QSTR_MotorWait,
+    .getiter = mp_identity_getiter,
+    .iternext = pb_type_MotorWait_iternext,
+    .locals_dict = (mp_obj_dict_t *)&pb_type_MotorWait_locals_dict,
+};
+
+STATIC mp_obj_t pb_type_MotorWait_new(pbio_servo_t *srv) {
+    pb_type_MotorWait_t *self = m_new_obj(pb_type_MotorWait_t);
+    self->base.type = &pb_type_MotorWait;
+    self->srv = srv;
+    return MP_OBJ_FROM_PTR(self);
+}
+
 // pybricks._common.Motor.__init__
 STATIC mp_obj_t common_Motor_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     PB_PARSE_ARGS_CLASS(n_args, n_kw, args,
@@ -189,9 +247,10 @@ STATIC mp_obj_t common_Motor_run_time(size_t n_args, const mp_obj_t *pos_args, m
 
     if (mp_obj_is_true(wait_in)) {
         wait_for_completion(self->srv);
+        return mp_const_none;
     }
 
-    return mp_const_none;
+    return pb_type_MotorWait_new(self->srv);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Motor_run_time_obj, 1, common_Motor_run_time);
 
@@ -275,9 +334,10 @@ STATIC mp_obj_t common_Motor_run_angle(size_t n_args, const mp_obj_t *pos_args, 
 
     if (mp_obj_is_true(wait_in)) {
         wait_for_completion(self->srv);
+        return mp_const_none;
     }
 
-    return mp_const_none;
+    return pb_type_MotorWait_new(self->srv);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Motor_run_angle_obj, 1, common_Motor_run_angle);
 
@@ -299,9 +359,10 @@ STATIC mp_obj_t common_Motor_run_target(size_t n_args, const mp_obj_t *pos_args,
 
     if (mp_obj_is_true(wait_in)) {
         wait_for_completion(self->srv);
+        return mp_const_none;
     }
 
-    return mp_const_none;
+    return pb_type_MotorWait_new(self->srv);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Motor_run_target_obj, 1, common_Motor_run_target);
 
