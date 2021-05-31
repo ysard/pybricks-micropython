@@ -20,12 +20,25 @@
 
 /* Wait for servo maneuver to complete */
 
-STATIC void wait_for_completion(pbio_servo_t *srv) {
-    while (pbio_servo_is_connected(srv) && !pbio_control_is_done(&srv->control)) {
-        mp_hal_delay_ms(5);
-    }
-    if (!pbio_servo_is_connected(srv)) {
+// The __next__() method should raise a StopIteration if the operation is
+// complete.
+STATIC mp_obj_t pb_type_Motor_iternext(mp_obj_t self_in) {
+    common_Motor_obj_t *self = MP_OBJ_TO_PTR(self_in);
+
+    if (!pbio_servo_is_connected(self->srv)) {
         pb_assert(PBIO_ERROR_IO);
+    }
+
+    if (pbio_control_is_done(&self->srv->control)) {
+        return MP_OBJ_STOP_ITERATION;
+    }
+
+    return mp_const_none;
+}
+
+STATIC void wait_for_completion(mp_obj_t obj_in) {
+    while (mp_iternext(obj_in) != MP_OBJ_STOP_ITERATION) {
+        mp_hal_delay_ms(5);
     }
 }
 
@@ -188,10 +201,11 @@ STATIC mp_obj_t common_Motor_run_time(size_t n_args, const mp_obj_t *pos_args, m
     pb_assert(pbio_servo_run_time(self->srv, speed, time, then));
 
     if (mp_obj_is_true(wait_in)) {
-        wait_for_completion(self->srv);
+        wait_for_completion(MP_OBJ_FROM_PTR(self));
+        return mp_const_none;
     }
 
-    return mp_const_none;
+    return MP_OBJ_FROM_PTR(self);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Motor_run_time_obj, 1, common_Motor_run_time);
 
@@ -232,7 +246,7 @@ STATIC mp_obj_t common_Motor_run_until_stalled(size_t n_args, const mp_obj_t *po
 
         // In this command we always wait for completion, so we can return the
         // final angle below.
-        wait_for_completion(self->srv);
+        wait_for_completion(MP_OBJ_FROM_PTR(self));
 
         nlr_pop();
     } else {
@@ -274,10 +288,11 @@ STATIC mp_obj_t common_Motor_run_angle(size_t n_args, const mp_obj_t *pos_args, 
     pb_assert(pbio_servo_run_angle(self->srv, speed, angle, then));
 
     if (mp_obj_is_true(wait_in)) {
-        wait_for_completion(self->srv);
+        wait_for_completion(MP_OBJ_FROM_PTR(self));
+        return mp_const_none;
     }
 
-    return mp_const_none;
+    return MP_OBJ_FROM_PTR(self);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Motor_run_angle_obj, 1, common_Motor_run_angle);
 
@@ -298,10 +313,11 @@ STATIC mp_obj_t common_Motor_run_target(size_t n_args, const mp_obj_t *pos_args,
     pb_assert(pbio_servo_run_target(self->srv, speed, target_angle, then));
 
     if (mp_obj_is_true(wait_in)) {
-        wait_for_completion(self->srv);
+        wait_for_completion(MP_OBJ_FROM_PTR(self));
+        return mp_const_none;
     }
 
-    return mp_const_none;
+    return MP_OBJ_FROM_PTR(self);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(common_Motor_run_target_obj, 1, common_Motor_run_target);
 
@@ -341,6 +357,8 @@ STATIC const mp_rom_map_elem_t common_Motor_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_track_target), MP_ROM_PTR(&common_Motor_track_target_obj) },
     { MP_ROM_QSTR(MP_QSTR_control), MP_ROM_ATTRIBUTE_OFFSET(common_Motor_obj_t, control) },
     { MP_ROM_QSTR(MP_QSTR_log), MP_ROM_ATTRIBUTE_OFFSET(common_Motor_obj_t, logger) },
+    // close() method is alias for stop() for compatibility with generators
+    { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&common_DCMotor_stop_obj) },
 };
 MP_DEFINE_CONST_DICT(common_Motor_locals_dict, common_Motor_locals_dict_table);
 
@@ -350,6 +368,8 @@ const mp_obj_type_t pb_type_Motor = {
     .name = MP_QSTR_Motor,
     .print = common_DCMotor_print,
     .make_new = common_Motor_make_new,
+    .getiter = mp_identity_getiter,
+    .iternext = pb_type_Motor_iternext,
     .locals_dict = (mp_obj_dict_t *)&common_Motor_locals_dict,
 };
 
