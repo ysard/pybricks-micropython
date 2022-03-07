@@ -834,7 +834,7 @@ end:
 }
 
 static PT_THREAD(test_technic_xl_motor(struct pt *pt)) {
-    // info messages captured from Technic XL Linear Motor with logic analyzer
+    // info messages captured from Technic Control+ XL Linear Motor with logic analyzer
     static const uint8_t msg2[] = { 0x40, 0x2F, 0x90 };
     static const uint8_t msg3[] = { 0x49, 0x05, 0x03, 0xB0 };
     static const uint8_t msg4[] = { 0x52, 0x00, 0xC2, 0x01, 0x00, 0x6E };
@@ -915,7 +915,7 @@ static PT_THREAD(test_technic_xl_motor(struct pt *pt)) {
     SIMULATE_TX_MSG(msg_speed_115200);
     SIMULATE_RX_MSG(msg_ack);
 
-    // send BOOST Color and Distance sensor info
+    // send Technic Control+ XL Motor info
     SIMULATE_RX_MSG(msg2);
     SIMULATE_RX_MSG(msg3);
     SIMULATE_RX_MSG(msg4);
